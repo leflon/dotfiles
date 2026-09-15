@@ -128,11 +128,12 @@ nnoremap <silent> - <C-w>5<
 nnoremap <silent> = <C-w>=
 
 
-tnoremap <Left> <Nop>
-tnoremap <Right> <Nop>
-tnoremap <silent> <Left> <C-w>h
-tnoremap <silent> <Right> <C-w>l
-tnoremap <silent> <Esc> <C-w><S-n>
+set termwinkey=<C-x>
+tnoremap <Left> <Left>
+tnoremap <Right> <Right>
+tnoremap <Up> <Up>
+tnoremap <Down> <Down>
+tnoremap <Esc> <C-x><S-n>
 
 augroup ReadOnlyHooks
 	autocmd!
@@ -265,12 +266,13 @@ augroup TerminalPaneAutoCommands
 	autocmd!
 	autocmd WinClosed * if expand('<amatch>') == g:pl#term#winid | let g:pl#term#winid = v:null | endif
 	autocmd WinResized * if g:pl#term#winid != v:null | let g:pl#term#cols = winwidth(g:pl#term#winid) | endif
+	autocmd TerminalOpen * setlocal nonumber norelativenumber | setlocal signcolumn=no
 augroup END
 
 nnoremap <silent> <C-B> :call ToggleTerm()<CR>
-tnoremap <silent> <C-B> <C-w>:call ToggleTerm()<CR>
-tnoremap <silent> <C-Right> <C-w>:call TermNavigate(1)<CR>
-tnoremap <silent> <C-Left> <C-w>:call TermNavigate(-1)<CR>
+tnoremap <silent> <C-B> <C-x>:call ToggleTerm()<CR>
+tnoremap <silent> <S-Right> <C-x>:call TermNavigate(1)<CR>
+tnoremap <silent> <S-Left> <C-x>:call TermNavigate(-1)<CR>
 
 
 """ Editor pane
