@@ -29,7 +29,7 @@ set noexpandtab
 "Code features
 
 " Autosave
-autocmd InsertLeave * silent write
+autocmd InsertLeave * silent! write
 let g:coc_global_extensions = ['coc-git', 'coc-tsserver'] 
 
 " Autocompletion with TAB and Enter
@@ -133,7 +133,13 @@ tnoremap <Left> <Left>
 tnoremap <Right> <Right>
 tnoremap <Up> <Up>
 tnoremap <Down> <Down>
+tnoremap <Esc> <Nop>
 tnoremap <Esc> <C-x><S-n>
+tnoremap <leader><Esc> <C-x><S-n>
+tnoremap <leader><Left> <C-x>h
+tnoremap <leader><Right> <C-x>l
+tnoremap <leader><Up> <C-x>k
+tnoremap <leader><Down> <C-x>j
 
 augroup ReadOnlyHooks
 	autocmd!
@@ -172,21 +178,15 @@ nnoremap <silent> <C-k>e :25Lexplore<CR>
 """Terminal pane
 
 let g:pl#term#cols = 70
-let g:pl#term#buffers = []
 let g:pl#term#winid = v:null
 
-function! _termdbg() abort
-	echo "buffers: " . join(g:pl#term#buffers, ',') . " winid: " . g:pl#term#winid . " cols: " . g:pl#term#cols
+function! GetTerminals() abort
+	return map(filter(getbufinfo({'buflisted':1}), {_, b -> getbufvar(b.bufnr, '&buftype') ==# 'terminal' }), { _, b -> b.bufnr })
 endfunction
 
 function! OnTermExit(bufid) abort
-	if len(g:pl#term#buffers) - 1 > 0
+	if len(GetTerminals()) - 1 > 0
 		call TermNavigate(-1)
-	endif
-
-	let l:idx = index(g:pl#term#buffers, a:bufid)
-	if l:idx >= 0
-		call remove(g:pl#term#buffers, l:idx)
 	endif
 
 	exe 'bd ' . a:bufid
@@ -197,7 +197,6 @@ function! OpenNewTerm(curwin=0) abort
 	let l:term = term_start(&shell, { "stoponexit": 0, "vertical": 1, "curwin": a:curwin, "term_cols": g:pl#term#cols })
 
 	call term_getjob(l:term)->job_setoptions({ "exit_cb": { _, __ -> OnTermExit(l:term)}})
-	call add(g:pl#term#buffers, l:term)
 endfunction
 
 function! OpenTermWindow(stay_in = 1) abort
@@ -209,10 +208,10 @@ function! OpenTermWindow(stay_in = 1) abort
 	200wincmd l
 	200wincmd j
 
-	if len(g:pl#term#buffers) == 0
+	if len(GetTerminals()) == 0
 		call OpenNewTerm()
 	else 
-		exe 'rightb ' . g:pl#term#cols . 'vsp | buffer ' . g:pl#term#buffers[0]
+		exe 'rightb ' . g:pl#term#cols . 'vsp | buffer ' . GetTerminals()[0]
 	endif
 
 	let g:pl#term#winid = win_getid()
@@ -245,19 +244,19 @@ function! TermNavigate(dir) abort
 		return
 	endif
 
-	let l:idx = index(g:pl#term#buffers, bufnr('%'))
+	let l:idx = index(GetTerminals(), bufnr('%'))
 	if l:idx == -1
 		return
 	endif
 
 	if a:dir == 1 "Go Right
-		if l:idx == len(g:pl#term#buffers) - 1
+		if l:idx == len(GetTerminals()) - 1
 			call OpenNewTerm(1)
 		else
-			exe 'buffer ' . g:pl#term#buffers[l:idx + 1]
+			exe 'buffer ' . GetTerminals()[l:idx + 1]
 		endif
 	else
-		exe 'buffer ' . g:pl#term#buffers[l:idx - 1]
+		exe 'buffer ' . GetTerminals()[l:idx - 1]
 	endif
 endfunction
 	
@@ -266,11 +265,13 @@ augroup TerminalPaneAutoCommands
 	autocmd!
 	autocmd WinClosed * if expand('<amatch>') == g:pl#term#winid | let g:pl#term#winid = v:null | endif
 	autocmd WinResized * if g:pl#term#winid != v:null | let g:pl#term#cols = winwidth(g:pl#term#winid) | endif
-	autocmd TerminalOpen * setlocal nonumber norelativenumber | setlocal signcolumn=no
+	autocmd ModeChanged *:[nN]* if &buftype ==# 'terminal' | set nonumber norelativenumber | set signcolumn=no | endif
 augroup END
 
-nnoremap <silent> <C-B> :call ToggleTerm()<CR>
-tnoremap <silent> <C-B> <C-x>:call ToggleTerm()<CR>
+nnoremap <silent> <C-J> :call ToggleTerm()<CR>
+nnoremap <silent> <leader><leader> :call ToggleTerm()<CR>
+tnoremap <silent> <C-J> <C-x>:call ToggleTerm()<CR>
+tnoremap <silent> <leader><leader> <C-x>:call ToggleTerm()<CR>
 tnoremap <silent> <S-Right> <C-x>:call TermNavigate(1)<CR>
 tnoremap <silent> <S-Left> <C-x>:call TermNavigate(-1)<CR>
 
@@ -287,9 +288,8 @@ function! Bnav(dir) abort
 		bprevious
 	endif
 
-	" Ignore buffers in other windows, and ignore terminals that belong to the
-	" terminal pane
-	if len(win_findbuf(bufnr('%'))) > 1 || index(g:pl#term#buffers, bufnr('%')) != -1
+	" Ignore buffers in other windows, and ignore all terminals
+	if len(win_findbuf(bufnr('%'))) > 1 || &buftype ==# 'terminal'
 		call Bnav(a:dir)
 	endif
 endfunction
@@ -304,6 +304,27 @@ nnoremap <silent> <Tab> :call Bnav(1)<CR>
 nnoremap <silent> <S-Tab> :call Bnav(-1)<CR>
 nnoremap <silent> <leader>d :call Bclose()<CR>
 nnoremap <silent> <leader>q :call Bclose()<CR>
+nnoremap <silent> <C-w> :call Bclose()<CR>
+
+function! KillTerms() abort
+		for t in GetTerminals()
+			exe 'bd! ' . t
+		endfor
+endfunction 
+
+function! OnQuitHook() abort
+	let l:wins = len(getwininfo())
+	let l:curwin = win_getid()
+
+	if l:wins == 1 
+		call KillTerms()
+	endif
+endfunction
+
+augroup OnQuit
+	autocmd QuitPre * :call OnQuitHook()
+augroup END
+
 
 " Fzf
 nnoremap <silent> <C-e> :Files<CR>
